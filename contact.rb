@@ -5,8 +5,6 @@ require 'pg'
 # The ContactList class will work with Contact objects instead of interacting with the CSV file directly
 class Contact
 
-  @@contact_content = CSV.read('seed.csv')
-
   attr_accessor :name, :email, :id
   
   # Creates a new contact object
@@ -22,10 +20,9 @@ class Contact
     !id.nil?
   end
 
-
   def save
     if persisted?
-      Contact.connection.exec_params("UPDATE contacts SET name = $1, email = $2 WHERE id = $3;", [self.name, self.email, self.id])
+      Contact.connection.exec_params("UPDATE contacts SET name = $1, email = $2 WHERE id = $3;", [name, email, id])
     else
       Contact.connection.exec_params("INSERT INTO contacts(name, email) VALUES ($1, $2);", [self.name, self.email])
     end
@@ -34,6 +31,11 @@ class Contact
   def destroy
     Contact.connection.exec_params("DELETE FROM contacts WHERE id = $1::int;", [self.id])
   end
+
+  def inspect
+    "Contact: @id=#{id} @name=#{name} @email=#{email}"
+  end
+  # Contact:0x909a5c0 @name="Tina Ji", @email="tinaji@qq.com", @id="1"
 
   # Provides functionality for managing contacts in the csv file.
   class << self
