@@ -1,4 +1,5 @@
 require 'csv'
+require 'pg'
 
 # Represents a person in an address book.
 # The ContactList class will work with Contact objects instead of interacting with the CSV file directly
@@ -6,10 +7,7 @@ class Contact
 
   @@contact_content = CSV.read('seed.csv')
 
-  # @@contact_contents_hash = 
-  # [[1,"alvin","alin@icloud.com"], [1,"tina", "tina@hotmail.com"]]
-
-  attr_accessor :name, :email
+  attr_accessor :name, :email, :id
   
   # Creates a new contact object
   # @param name [String] The contact's name
@@ -20,24 +18,48 @@ class Contact
     @email = email
   end
 
+  def persisted?
+    !id.nil?
+  end
 
+
+  def save
+    if persisted?
+      Contact.connection.exec_params("UPDATE contacts SET name = $1, email = $2 WHERE id = $3;", [self.name, self.email, self.id])
+    else
+      Contact.connection.exec_params("INSERT INTO contacts(name, email) VALUES ($1, $2);", [self.name, self.email])
+    end
+  end
+
+  def destroy
+    Contact.connection.exec_params("DELETE FROM contacts WHERE id = $1::int;", [self.id])
+  end
 
   # Provides functionality for managing contacts in the csv file.
   class << self
 
-    def convert_csv_to_array_hash
-      contacts = []
-        @@contact_content.each do |inner_array|
-          contact = { id: inner_array[0],name: inner_array[1], email: inner_array[2]}
-          contacts << contact
-        end
-      contacts
+    def connection
+      conn = PG.connect(
+        host: 'localhost',
+        dbname: 'contact_list',
+        user: 'development',
+        password: 'development'
+      )
     end
 
     # Opens 'contacts.csv' and creates a Contact object for each line in the file (aka each contact).
     # @return [Array<Contact>] Array of Contact objects
     def all
-      self.convert_csv_to_array_hash
+      all_contacts = self.connection.exec("SELECT * FROM contacts;")
+
+      all_contacts_in_array = self.connection.exec("SELECT * FROM contacts;").map do |row|
+        contact = Contact.new(row['name'], row['email'])
+        contact.id = row['id']
+        contact
+      end 
+
+      all_contacts_in_array
+
     end
 
     # Creates a new contact, adding it to the csv file, returning the new contact.
@@ -45,38 +67,22 @@ class Contact
     # @param email [String] the contact's email
     def create(name, email)
       # TODO: Instantiate a Contact, add its data to the 'contacts.csv' file, and return it.
-      contact = Contact.new(name, email)
-      if @@contact_content.empty?
-        id = 1
-      else
-        id = @@contact_content.last.first.to_i + 1
-      end
-
-      contacts = self.convert_csv_to_array_hash
-
-      contacts.each do |contact|
-        return false if contact[:email] == email
-      end
-
-      contact_array = []
-
-      contact_array << id
-      contact_array << contact.name
-      contact_array << contact.email
-
-      CSV.open('seed.csv', 'ab') do |csv_object|
-        csv_object << contact_array
-      end
-      contact = {name: contact.name, id: id}
+      contact = Contact.new(name, email) 
+      contact.save
+      contact
     end
     
     # Find the Contact in the 'contacts.csv' file with the matching id.
     # @param id [Integer] the contact id
     # @return [Contact, nil] the contact with the specified id. If no contact has the id, returns nil.
     def find(id)
+
       # TODO: Find the Contact in the 'contacts.csv' file with the matching id.
-      id = id - 1
-      contact = @@contact_content[id]
+      res = self.connection.exec_params("SELECT * FROM contacts WHERE id = $1::int;", [id])
+      return nil if res.count == 0
+      contact = Contact.new(res[0]['name'], res[0]['email'])
+      contact.id = res[0]['id']
+      contact
     end
     
     # Search for contacts by either name or email.
@@ -84,13 +90,14 @@ class Contact
     # @return [Array<Contact>] Array of Contact objects.
     def search(term)
 
-      term = term.downcase
-      contacts = self.convert_csv_to_array_hash
-
-      fillter_contacts = contacts.select do |contact|
-        contact[:name].downcase.include?(term) or contact[:email].downcase.include?(term)
+      res = self.connection.exec_params("SELECT * FROM contacts WHERE name ILIKE $1 OR email ILIKE $2", ["%#{term}%", "%#{term}%"])
+      return nil if res.count == 0
+      res_in_array = res.map do |row|
+        contact  = self.new(row['name'], row['email'])
+        contact.id = row['id']
+        contact
       end
-
+      res_in_array
       # TODO: Select the Contact instances from the 'contacts.csv' file whose name or email attributes contain the search term.
     end
 
