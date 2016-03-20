@@ -1,2 +1,6 @@
 source 'https://rubygems.org'
 gem 'pg'
+gem 'pry'
+gem 'activerecord'
+gem 'activesupport'
+gem 'database_cleaner'

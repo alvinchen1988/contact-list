@@ -9,6 +9,7 @@ class ContactList
     @first_param = @user_input[0]
     @second_param = @user_input[1]
     @param_length = @user_input.length
+    AppConfig.establish_connection
   end
 
   def welcome_screen
@@ -31,7 +32,7 @@ class ContactList
   end
 
   def new_contact(name, email)
-    contact= Contact.create(name,email)
+    contact= Contact.create(name: name,email: email)
     puts contact ? "#{contact.name} is succesfully added to the contact list" : "#{email} already exist in your contact book" 
   end
 
@@ -42,7 +43,7 @@ class ContactList
   end
 
   def search_contact(term)
-    filtered_contacts = Contact.search(term)
+    filtered_contacts = Contact.where("name ILIKE ? OR email ILIKE ?", "%#{term}%", "%#{term}%")
     return puts "Not found" if filtered_contacts.nil?
 
     filtered_contacts.each do |contact|
@@ -136,6 +137,7 @@ case contact_list.first_param
   when "destroy"
     if contact_id = contact_list.second_param
       contact_list.delete_contact(contact_id)
+      puts "contact with id:#{contact_id} deleted"
     else
       puts "missing user id as the second argument of destroy"
     end
